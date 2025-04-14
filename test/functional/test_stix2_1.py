@@ -1,22 +1,15 @@
 import unittest
-from unittest.mock import MagicMock
 import sys
 import os
-
-# Add the parent directory to sys.path
 sys.path.append(os.path.join(os.environ.get("MITRE_HOME", ""), "lib"))
 from parsers.stix2_1 import Stix2_1
 
-class TestStix2_1Parser(unittest.TestCase):
+class TestStix2_1ParserFunctional(unittest.TestCase):
     def setUp(self):
         # Initialize the parser
         self.parser = Stix2_1()
 
-        # Mock the template method to avoid dependency on actual templates
-        self.parser.template = MagicMock()
-        self.parser.template().render = MagicMock(return_value="Mocked Markdown Output")
-
-        # Mock data for tactics, techniques, and subtechniques
+        # Set up real data for tactics, techniques, and subtechniques
         self.parser.tactic_map = {
             "tactic1": {"name": "Tactic 1", "id": "TA0001"},
             "tactic2": {"name": "Tactic 2", "id": "TA0002"},
@@ -32,19 +25,37 @@ class TestStix2_1Parser(unittest.TestCase):
         # Set extract_pending to False to skip data extraction
         self.parser.extract_pending = False
 
-    def test_print_markdown(self):
-        # Call the method
-        self.parser.print_markdown()
+        # Set up the template directory and template name
+        self.template_dir = os.path.join(os.environ.get("MITRE_HOME", ""), "templates")
+        self.template_name = "stix2.1.md"
 
-        # Assert that the template's render method was called with the correct arguments
-        self.parser.template().render.assert_called_once_with(
-            tactics=self.parser.tactic_map,
-            techniques=self.parser.technique_map,
-            subtechniques=self.parser.subtechnique_map,
-        )
+    def test_print_markdown_with_real_template(self):
+        # Ensure the template exists
+        template_path = os.path.join(self.template_dir, self.template_name)
+        self.assertTrue(os.path.exists(template_path), f"Template not found: {template_path}")
 
-        # Assert that the output is as expected
-        self.assertEqual(self.parser.template().render.return_value, "Mocked Markdown Output")
+        # Set the template method to use the real template
+        from jinja2 import Environment, FileSystemLoader
+        env = Environment(loader=FileSystemLoader(self.template_dir))
+        self.parser.template = lambda: env.get_template(self.template_name)
+
+        # Call the method to generate Markdown
+        try:
+            self.parser.print_markdown()
+        except Exception as e:
+            self.fail(f"print_markdown raised an exception: {e}")
+
+    def test_empty_data(self):
+        # Test behavior when all maps are empty
+        self.parser.tactic_map = {}
+        self.parser.technique_map = {}
+        self.parser.subtechnique_map = {}
+
+        # Call the method to generate Markdown
+        try:
+            self.parser.print_markdown()
+        except Exception as e:
+            self.fail(f"print_markdown raised an exception with empty data: {e}")
 
 if __name__ == "__main__":
     unittest.main()
